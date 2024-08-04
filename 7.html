@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نمایش نقاط از فایل JSON بر روی نقشه و مسیریابی</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+    <style>
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        .custom-div-icon {
+            font-size: 12px;
+            text-align: center;
+            background-color: transparent;
+            border: none;
+        }
+        .custom-icon-start {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background-color: #ff0000;
+            color: white;
+            font-weight: bold;
+        }
+        .custom-icon-end {
+            width: 32px;
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            background-color: #0000ff;
+            color: white;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        // مقداردهی اولیه نقشه
+        var map = L.map('map').setView([36.0, 50.0], 6); // مرکزشده در وسط بین تهران و رشت
+
+        // افزودن لایه نقشه
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        var routingControl = null;
+        var jsonMarkers = [];
+        var routeMarkers = [];
+        var waypoints = [];
+        var startMarker = null;
+        var endMarker = null;
+
+        // تابع برای بارگذاری و نمایش نقاط از فایل JSON
+        function loadJSON(url) {
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(function(point) {
+                        var lat = parseFloat(point.lat);
+                        var lng = parseFloat(point.lng);
+                        var name = point.name || "";
+                        var fname = point.fname || "";
+                        var description = point.description || "";
+                        var info = point.info || "";
+                        var add = point.add || "";
+                        var mashhad = point.mashhad || "";
+                        var url = point.url || "";
+
+                        if (!isNaN(lat) && !isNaN(lng)) {
+                            var popupContent = `<b>نام: </b>${name}<br>
+                                                <b>نام کامل: </b>${fname}<br>
+                                                <b>اطلاعات: </b>${info}<br>
+                                                <b>آدرس: </b>${add}<br>
+                                                <b>مشهد: </b>${mashhad}<br>
+                                                <a href="${url}" target="_blank">اطلاعات بیشتر</a><br>
+                                                <button onclick="setAsStart(${lat}, ${lng})">انتخاب به عنوان مبدا</button>
+                                                <button onclick="setAsEnd(${lat}, ${lng})">انتخاب به عنوان مقصد</button>`;
+                            var marker = L.marker([lat, lng]).addTo(map)
+                                .bindPopup(popupContent); // افزودن پاپ‌آپ با محتوای سفارشی
+                            jsonMarkers.push(marker);
+                        }
+                    });
+                })
+                .catch(error => console.error('خطا در بارگذاری فایل JSON:', error));
+        }
+
+        // بارگذاری فایل JSON (نام فایل را در اینجا مشخص کنید)
+        loadJSON('7.json');
+
+        // تابع برای تنظیم مبدا
+        function setAsStart(lat, lng) {
+            if (startMarker) {
+                map.removeLayer(startMarker);
+            }
+            startMarker = L.marker([lat, lng], { icon: customIconStart }).addTo(map);
+            waypoints[0] = L.latLng(lat, lng);
+            updateRoute();
+        }
+
+        // تابع برای تنظیم مقصد
+        function setAsEnd(lat, lng) {
+            if (endMarker) {
+                map.removeLayer(endMarker);
+            }
+            endMarker = L.marker([lat, lng], { icon: customIconEnd }).addTo(map);
+            waypoints[1] = L.latLng(lat, lng);
+            updateRoute();
+        }
+
+        // تابع برای به‌روزرسانی مسیر
+        function updateRoute() {
+            if (routingControl !== null) {
+                map.removeControl(routingControl);
+            }
+            if (waypoints.length === 2) {
+                routingControl = L.Routing.control({
+                    waypoints: waypoints,
+                    createMarker: function(i, waypoint, n) {
+                        var icon = i === 0 ? customIconStart : customIconEnd;
+                        return L.marker(waypoint.latLng, { icon: icon });
+                    }
+                }).addTo(map);
+            }
+        }
+
+        // افزودن رویداد کلیک به نقشه برای انتخاب نقاط جدید
+        map.on('click', function(e) {
+            var lat = e.latlng.lat;
+            var lng = e.latlng.lng;
+            if (waypoints.length === 0) {
+                setAsStart(lat, lng);
+            } else if (waypoints.length === 1) {
+                setAsEnd(lat, lng);
+            } else {
+                // حذف علامت‌های قبلی و افزودن جدید
+                if (startMarker) map.removeLayer(startMarker);
+                if (endMarker) map.removeLayer(endMarker);
+                waypoints = [];
+                setAsStart(lat, lng);
+            }
+        });
+
+        // ایجاد آیکون‌های سفارشی برای مبدا و مقصد
+        var customIconStart = L.divIcon({
+            className: 'custom-div-icon',
+            html: "<div class='custom-icon-start'>مبدأ</div>",
+            iconSize: [32, 32],
+            iconAnchor: [16, 32]
+        });
+
+        var customIconEnd = L.divIcon({
+            className: 'custom-div-icon',
+            html: "<div class='custom-icon-end'>مقصد</div>",
+            iconSize: [32, 32],
+            iconAnchor: [16, 32]
+        });
+    </script>
+</body>
+</html>
