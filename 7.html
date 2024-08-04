@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نمایش نقاط از فایل JSON بر روی نقشه</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <style>
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <div id="map"></div>
+    <script>
+        // مقداردهی اولیه نقشه
+        var map = L.map('map').setView([36.0, 50.0], 6); // مرکزشده در وسط بین تهران و رشت
+
+        // افزودن لایه نقشه
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // تابع برای بارگذاری و نمایش نقاط از فایل JSON
+        function loadJSON(url) {
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    data.forEach(function(point) {
+                        var lat = parseFloat(point.lat);
+                        var lng = parseFloat(point.lng);
+                        var name = point.name || "";
+                        var fname = point.description || "";
+                        var info = point.info || "";
+
+                        if (!isNaN(lat) && !isNaN(lng)) {
+                            var popupContent = "<b>" + name + "</b><br>" + fname + "<br>" + info;
+                            L.marker([lat, lng]).addTo(map)
+                                .bindPopup(popupContent); // افزودن پاپ‌آپ با محتوای سفارشی
+                        }
+                    });
+                })
+                .catch(error => console.error('خطا در بارگذاری فایل JSON:', error));
+        }
+
+        // بارگذاری فایل JSON (نام فایل را در اینجا مشخص کنید)
+        loadJSON('7.json');
+    </script>
+</body>
+</html>
