@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="fa">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>نمایش موقعیت موبایل بر روی نقشه</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <style>
+        #map {
+            height: 100vh;
+            width: 100%;
+        }
+        #locateBtn {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 1000;
+            padding: 10px 15px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body>
+
+    <button id="locateBtn">نمایش موقعیت من</button>
+    <div id="map"></div>
+
+    <script>
+        // ایجاد نقشه و تنظیمات اولیه
+        var map = L.map('map').setView([35.6892, 51.3890], 13); // پیش‌فرض نقشه روی تهران
+
+        // بارگذاری لایه‌ی نقشه از OpenStreetMap
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        var gpsMarker;
+
+        // تابع برای پیدا کردن موقعیت کاربر
+        function locateMe() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    var lat = position.coords.latitude;
+                    var lng = position.coords.longitude;
+
+                    // اگر قبلا مارکری روی نقشه بود، آن را حذف کن
+                    if (gpsMarker) {
+                        map.removeLayer(gpsMarker);
+                    }
+
+                    // اضافه کردن مارکر جدید در موقعیت فعلی کاربر
+                    gpsMarker = L.marker([lat, lng], {
+                        title: "موقعیت من",
+                        alt: "موقعیت فعلی"
+                    }).addTo(map).bindPopup("موقعیت فعلی شما").openPopup();
+
+                    // نقشه را به موقعیت فعلی کاربر بزرگنمایی کن
+                    map.setView([lat, lng], 15);
+                }, function(error) {
+                    console.error("خطا در دریافت موقعیت مکانی:", error);
+                    alert("خطا در دریافت موقعیت مکانی: " + error.message);
+                }, {
+                    enableHighAccuracy: true, // درخواست مکان دقیق‌تر
+                    timeout: 5000, // زمان انتظار برای دریافت مکان
+                    maximumAge: 0 // استفاده نکردن از مکان‌های کش شده
+                });
+            } else {
+                alert("مرورگر شما از این قابلیت پشتیبانی نمی‌کند.");
+            }
+        }
+
+        // وصل کردن تابع locateMe به دکمه
+        document.getElementById('locateBtn').addEventListener('click', locateMe);
+    </script>
+</body>
+</html>
