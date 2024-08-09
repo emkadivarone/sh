@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Display Two JSON Files on Map with Routing and Current Location</title>
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <!-- Leaflet Routing Machine CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
+    <style>
+        #map {
+            height: 500px;
+            width: 100%;
+        }
+        #search-box {
+            margin: 10px;
+        }
+        #result-count {
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1>Display Two JSON Files on Map with Layer Controls and Routing</h1>
+
+    <!-- Search Box -->
+    <div id="search-box">
+        <!-- Input for Dehestan search term -->
+        <input type="text" id="dehestanInput" placeholder="Enter Dehestan name">
+
+        <!-- Input for Bakhsh search term -->
+        <input type="text" id="bakhshInput" placeholder="Enter Bakhsh name">
+
+        <!-- Search button -->
+        <button onclick="search()">Search</button>
+        
+        <!-- Next button -->
+        <button onclick="showNextResult()">Next</button>
+
+        <!-- Button to get current location -->
+        <button onclick="showCurrentLocation()">Show Current Location</button>
+    </div>
+
+    <!-- Result Count Box -->
+    <div id="result-count">Results Found: 0</div>
+
+    <div id="map"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    <!-- Leaflet Routing Machine JS -->
+    <script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.js"></script>
+    <script>
+        // Initialize the map
+        var map = L.map('map').setView([37.4895, 48.2563], 13); // Coordinates and zoom level
+
+        // Add OSM tile layer
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        // Initialize layers
+        var layerGroup1 = L.layerGroup().addTo(map);
+        var layerGroup2 = L.layerGroup().addTo(map);
+
+        var geojsonLayer; // Variable to hold the GeoJSON layer
+        var searchResults = []; // Array to hold search results
+        var currentIndex = 0; // Index to track current search result
+        var routingControl = null; // Routing control for Leaflet Routing Machine
+        var startPoint = null; // Store start point
+        var endPoint = null; // Store end point
+        var currentLocationMarker = null; // Marker for the current location
+
+        // Function to add GeoJSON to a specific layer group
+        function addGeoJSONToLayerGroup(url, layerGroup) {
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    geojsonLayer = L.geoJSON(data, {
+                        onEachFeature: function (feature, layer) {
+                            if (feature.properties) {
+                                var popupContent = '<table>';
+                                for (var key in feature.properties) {
+                                    if (feature.properties.hasOwnProperty(key)) {
+                                        popupContent += '<tr><td><strong>' + key + ':</strong></td><td>' + feature.properties[key] + '</td></tr>';
+                                    }
+                                }
+                                popupContent += '</table>';
+                                
+                                // Add Start and End buttons in the popup
+                                popupContent += '<button onclick="setStartPoint(' + layer.getLatLng().lat + ',' + layer.getLatLng().lng + ')">Set as Start</button>';
+                                popupContent += '<button onclick="setEndPoint(' + layer.getLatLng().lat + ',' + layer.getLatLng().lng + ')">Set as End & Route</button>';
+                                
+                                layer.bindPopup(popupContent);
+                            }
+                        }
+                    }).addTo(layerGroup);
+                })
+                .catch(error => console.error('Error loading the JSON data:', error));
+        }
+
+        // Add GeoJSON files to their respective layer groups
+        addGeoJSONToLayerGroup('r.json', layerGroup1);
+        addGeoJSONToLayerGroup('e.json', layerGroup2);
+
+        // Add layer control
+        L.control.layers(null, {
+            'Layer 1': layerGroup1,
+            'Layer 2': layerGroup2
+        }).addTo(map);
+
+        // Function to search by Dehestan and/or Bakhsh
+        function search() {
+            var dehestanInput = document.getElementById('dehestanInput').value.trim();
+            var bakhshInput = document.getElementById('bakhshInput').value.trim();
+            searchResults = []; // Reset search results
+            currentIndex = 0; // Reset index
+
+            // Check if geojsonLayer is loaded
+            if (geojsonLayer) {
+                // Find all matching features
+                geojsonLayer.eachLayer(function(layer) {
+                    var match = true;
+
+                    // Check Dehestan match
+                    if (dehestanInput !== "" && (!layer.feature.properties.Dehestan || !layer.feature.properties.Dehestan.includes(dehestanInput))) {
+                        match = false;
+                    }
+
+                    // Check Bakhsh match
+                    if (bakhshInput !== "" && (!layer.feature.properties.Bakhsh || !layer.feature.properties.Bakhsh.includes(bakhshInput))) {
+                        match = false;
+                    }
+
+                    // If both conditions match (or if only one condition is provided and matched)
+                    if (match) {
+                        searchResults.push(layer);
+                    }
+                });
+            } else {
+                alert("GeoJSON data is not loaded yet.");
+                return;
+            }
+
+            // Display the number of results found
+            document.getElementById('result-count').innerText = "Results Found: " + searchResults.length;
+
+            // Check if there are any results
+            if (searchResults.length > 0) {
+                showNextResult();
+            } else {
+                alert("موردی یافت نشد.");
+            }
+        }
+
+        // Function to show the next search result
+        function showNextResult() {
+            if (searchResults.length === 0) {
+                alert("ابتدا جستجو کنید.");
+                return;
+            }
+
+            if (currentIndex < searchResults.length) {
+                var layer = searchResults[currentIndex];
+                map.setView(layer.getLatLng(), 15);
+                layer.openPopup();
+                currentIndex++;
+            } else {
+                alert("پایان جستجو. همه موارد پیدا شده نمایش داده شدند.");
+                currentIndex = 0; // Reset index for new search
+            }
+        }
+
+        // Function to set start point
+        function setStartPoint(lat, lng) {
+            startPoint = L.latLng(lat, lng);
+            startRouting(); // Automatically start routing if endPoint is set
+        }
+
+        // Function to set end point and start routing
+        function setEndPoint(lat, lng) {
+            endPoint = L.latLng(lat, lng);
+            startRouting(); // Automatically start routing if startPoint is set
+        }
+
+        // Function to start routing
+        function startRouting() {
+            if (!startPoint || !endPoint) {
+                return; // Don't do anything if startPoint or endPoint is not set
+            }
+
+            if (routingControl) {
+                map.removeControl(routingControl); // Remove the existing route if present
+            }
+
+            routingControl = L.Routing.control({
+                waypoints: [
+                    startPoint,
+                    endPoint
+                ],
+                routeWhileDragging: true,
+                createMarker: function() { return null; } // Hide markers
+            }).addTo(map);
+
+            // Speak the route instructions
+            if ('speechSynthesis' in window) {
+                var directions = routingControl.getPlan()._routes[0].instructions;
+                var synth = window.speechSynthesis;
+                for (var i = 0; i < directions.length; i++) {
+                    var instruction = directions[i].text;
+                    var utterance = new SpeechSynthesisUtterance(instruction);
+                    synth.speak(utterance);
+                }
+            } else {
+                console.warn('Speech Synthesis not supported in this browser.');
+            }
+        }
+
+        // Function to show current location
+        function showCurrentLocation() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function(position) {
+                    var lat = position.coords.latitude;
+                    var lng = position.coords.longitude;
+                    var currentLocation = L.latLng(lat, lng);
+
+                    // Remove the previous marker if it exists
+                    if (currentLocationMarker) {
+                        map.removeLayer(currentLocationMarker);
+                    }
+
+                    // Add marker to current location
+                    currentLocationMarker = L.marker(currentLocation).addTo(map)
+                        .bindPopup('<button onclick="setStartPoint(' + lat + ',' + lng + ')">Set as Start</button>' +
+                                   '<button onclick="setEndPoint(' + lat + ',' + lng + ')">Set as End & Route</button>')
+                        .openPopup();
+                    
+                    map.setView(currentLocation, 15);
+                }, function(error) {
+                    console.error('Error getting current location:', error);
+                });
+            } else {
+                alert("Geolocation is not supported by this browser.");
+            }
+        }
+
+        // Map click event to set start/end points
+        map.on('click', function(e) {
+            var lat = e.latlng.lat;
+            var lng = e.latlng.lng;
+
+            L.popup()
+                .setLatLng(e.latlng)
+                .setContent('Coordinates: ' + lat + ', ' + lng + '<br>' +
+                            '<button onclick="setStartPoint(' + lat + ',' + lng + ')">Set as Start</button>' +
+                            '<button onclick="setEndPoint(' + lat + ',' + lng + ')">Set as End & Route</button>')
+                .openOn(map);
+        });
+    </script>
+</body>
+</html>
